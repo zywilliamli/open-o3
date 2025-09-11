@@ -1,7 +1,6 @@
 import io
 import os
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing.pool import ThreadPool
 from typing import Any, Callable
 
@@ -10,7 +9,7 @@ import numpy as np
 import requests
 from tqdm import tqdm
 
-from interfaces import EvalResult, Message, SamplerBase, SingleEvalResult
+from eval.interfaces import EvalResult, Message, SamplerBase, SingleEvalResult
 
 QUERY_TEMPLATE_MULTICHOICE = """
 Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.

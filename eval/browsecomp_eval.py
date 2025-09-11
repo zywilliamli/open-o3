@@ -48,6 +48,7 @@ CHOICE_STRINGS = ["yes", "no"]
 RANDOM_SEED = 0
 random.seed(RANDOM_SEED)
 
+
 def derive_key(password: str, length: int) -> bytes:
     """Derive a fixed-length key from the password using SHA256."""
     hasher = hashlib.sha256()
@@ -97,8 +98,8 @@ class BrowseCompEval(Eval):
 
     def __call__(self, sampler: SamplerBase) -> EvalResult:
         def fn(row: dict):
-            problem = decrypt(row.get("query", ""), row.get("canary", ""))
-            answer = decrypt(row.get("answer", ""), row.get("canary", ""))
+            problem = row.get("query", "")
+            answer = row.get("answer", "")
             prompt_messages = [
                 sampler._pack_message(content=QUERY_TEMPLATE.format(Question=problem), role="user")
             ]

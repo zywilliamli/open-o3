@@ -15,6 +15,9 @@ import art
 
 class OAISearchAgentSampler(SamplerBase):
 
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+
     def _handle_image(
             self,
             image: str,
@@ -44,8 +47,8 @@ class OAISearchAgentSampler(SamplerBase):
 
     async def _build_and_invoke(self, message_list: MessageList):
         model = art.Model(
-            name="o4-mini", project="o4-mini-browse-comp",
-            inference_model_name="o4-mini",
+            name=self.model_name, project=f"{self.model_name}-eval",
+            inference_model_name=self.model_name,
             inference_api_key=os.getenv("OPENAI_API_KEY"),
             inference_base_url="https://api.openai.com/v1/",
         )

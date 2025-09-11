@@ -1,18 +1,13 @@
 import asyncio
-import json
-import os
 from typing import Any
 
 from eval.interfaces import MessageList, SamplerBase, SamplerResponse
 from search_agent import SearchAgent
 
-from art import Trajectory
-from art.langgraph import wrap_rollout
-from art.trajectories import get_messages
-import art
-
 
 class HFSearchAgentSampler(SamplerBase):
+    def __init__(self, model_name: str):
+        self.model_name = model_name
 
     def _handle_image(
             self,
@@ -37,7 +32,7 @@ class HFSearchAgentSampler(SamplerBase):
 
     async def rollout(self, message_list):
         agent = SearchAgent()
-        graph = await agent.build_trainable_graph()
+        graph = await agent.build_hf_graph(self.model_name)
         return await graph.ainvoke({"messages": message_list}, agent.config)
 
     def __call__(self, message_list: MessageList) -> SamplerResponse:
