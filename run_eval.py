@@ -39,7 +39,7 @@ def launch_model():
         export CUDA_LAUNCH_BLOCKING=1
         
         uv add 'openpipe-art[backend]'
-        uv run python test_eval.py --sampler=hf --sampler-model=twelvehertz/qwen2_5_14b_instruct_search_agent_sft_2 --num-samples=50
+        uv run python test_eval.py --sampler=hf --num-samples=50 --use-trained-peft
 
     """)
 

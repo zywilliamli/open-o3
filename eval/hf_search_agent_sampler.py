@@ -14,37 +14,36 @@ import os
 
 
 class HFSearchAgentSampler(SamplerBase):
-
-    def __init__(self, model_name: str):
+    def __init__(self, use_trained_peft: bool = False):
         self.model = art.TrainableModel(
             name="sft-open-o3",
             project="open-o3",
             base_model="unsloth/Qwen2.5-14B-Instruct"
         )
+        if use_trained_peft:
+            art_path = get_output_dir_from_model_properties(name="sft-open-o3", project="open-o3")
+            os.makedirs(art_path, exist_ok=True)
 
-        art_path = get_output_dir_from_model_properties(name="sft-open-o3", project="open-o3")
-        os.makedirs(art_path, exist_ok=True)
+            try:
+                import subprocess
 
-        try:
-            import subprocess
+                aws_cmd = "/usr/local/bin/aws"
 
-            aws_cmd = "/usr/local/bin/aws"
+                print("Starting S3 download...")
+                result = subprocess.run([
+                    aws_cmd, "s3", "sync",
+                    art_path,
+                    f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft",
+                    "--storage-class", "STANDARD_IA"
+                ], capture_output=True, text=True, timeout=600)
 
-            print("Starting S3 download...")
-            result = subprocess.run([
-                aws_cmd, "s3", "sync",
-                art_path,
-                f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft",
-                "--storage-class", "STANDARD_IA"
-            ], capture_output=True, text=True, timeout=600)
-
-            if result.returncode == 0:
-                print("✅ S3 download completed successfully!")
-            else:
-                print(f"❌ S3 download failed: {result.stderr}")
-                raise Exception(f"S3 sync failed: {result.stderr}")
-        except Exception as e:
-            print(f"S3 download failed with exception: {e}")
+                if result.returncode == 0:
+                    print("✅ S3 download completed successfully!")
+                else:
+                    print(f"❌ S3 download failed: {result.stderr}")
+                    raise Exception(f"S3 sync failed: {result.stderr}")
+            except Exception as e:
+                print(f"S3 download failed with exception: {e}")
         backend = LocalBackend()
         asyncio.run(self.model.register(backend))
         print('finished registering model')

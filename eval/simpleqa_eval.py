@@ -163,7 +163,7 @@ class SimpleQAEval(Eval):
             })
 
         # Run evaluation and collect results
-        results = common.map_with_progress(fn, self.examples)
+        results = common.map_with_progress(fn, self.examples, num_threads=2)
 
         # Aggregate metrics
         aggregate_metrics = {

@@ -28,9 +28,9 @@ def run_eval(args):
         raise ValueError(f"Invalid eval set name, currently only supporting {SUPPORTED_EVAL_SETS}")
 
     if args.sampler == "oai":
-        sampler = OAISearchAgentSampler(args.sampler_model)
+        sampler = OAISearchAgentSampler("o4-mini")
     elif args.sampler == "hf":
-        sampler = HFSearchAgentSampler(args.sampler_model)
+        sampler = HFSearchAgentSampler(args.use_trained_peft)
     else:
         raise ValueError("Invalid sampler, must be 'oai' or 'hf'")
 
@@ -42,8 +42,8 @@ def main():
     parser.add_argument("--grader-model", default="o4-mini", help="openai model for grading response")
     parser.add_argument("--sampler", default="oai",
                         help="'oai' for OpenAI models via API or 'hf' for HuggingFace models run locally")
-    parser.add_argument("--sampler-model", default="o4-mini",
-                        help="openai model name if sampler set to 'oai', or huggingface model name if sampler set to 'hf'")
+    parser.add_argument("--use-trained-peft", action="store_true",
+                        help="if sampler is hf, this param optionally pulls trained peft from s3/hf hub, otherwise uses base model")
     parser.add_argument("--num-samples", default=1, help="number of samples to run")
     parser.add_argument("--eval-set", default="simpleqa",
                         help=f"eval set name, currently supporting {SUPPORTED_EVAL_SETS}")
