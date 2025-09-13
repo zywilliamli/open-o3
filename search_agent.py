@@ -22,9 +22,6 @@ from langchain_openai import ChatOpenAI
 from art.langgraph import init_chat_model as train_model
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
-from langchain_community.llms import HuggingFacePipeline
-
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 
 SYSTEM_PROMPT = f"""You are an AI assistant, your task is to answer the user's query.
 You have access to a web search tool to help you gather information when needed. 
@@ -69,25 +66,6 @@ class SearchAgent:
 
     async def build_trainable_graph(self):
         return await self._build_graph(train_model())
-
-    async def build_hf_graph(self, model_name: str):
-        tok = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            device_map="auto",
-            torch_dtype="auto"
-        )
-
-        gen_pipe = pipeline(
-            task="text-generation",
-            model=model,
-            tokenizer=tok,
-            max_new_tokens=512,
-            do_sample=False,
-        )
-
-        llm = HuggingFacePipeline(pipeline=gen_pipe)
-        return await self._build_graph(llm)
 
     async def build_graph(self, model_name: str = "openai:o3"):
         if model_name.startswith("openai"):

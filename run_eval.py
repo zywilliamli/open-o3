@@ -11,7 +11,12 @@ def launch_model():
     setup_script = textwrap.dedent(
         """
             echo 'Setting up environment...'
-            apt update && apt install -y nvtop curl unzip
+            apt update && apt install -y nvtop curl unzip build-essential python3-dev
+            
+            # Set Python compilation flags for C extensions
+            export PY_SSIZE_T_CLEAN=1
+            export CFLAGS="-DPY_SSIZE_T_CLEAN"
+            export CPPFLAGS="-DPY_SSIZE_T_CLEAN"
             
             # Install AWS CLI v2 (Python 3 compatible)
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -23,14 +28,24 @@ def launch_model():
         """
     )
 
+    # Remove --no-managed-python and revert to python 3.12 once https://github.com/astral-sh/python-build-standalone/pull/667#issuecomment-3059073433 is addressed.
+    # uv pip install "git+https://github.com/JonesAndrew/ART.git@12e1dfe#egg=openpipe-art[backend,langgraph]"
     run_script = textwrap.dedent(f"""
-        uv add unsloth
-        uv run python sft.py
+        # Set environment variables for Python C extensions and CUDA
+        export PY_SSIZE_T_CLEAN=1
+        export CFLAGS="-DPY_SSIZE_T_CLEAN"
+        export CPPFLAGS="-DPY_SSIZE_T_CLEAN"
+        export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:False,max_split_size_mb:128
+        export CUDA_LAUNCH_BLOCKING=1
+        
+        uv add 'openpipe-art[backend]'
+        uv run python test_eval.py --sampler=hf --sampler-model=twelvehertz/qwen2_5_14b_instruct_search_agent_sft_2 --num-samples=50
+
     """)
 
     # Create a SkyPilot Task
     task = sky.Task(
-        name=f"open-o3-sft",
+        name=f"open-o3-eval",
         setup=setup_script,
         run=run_script,
         workdir=".",  # Sync the project directory
@@ -39,7 +54,7 @@ def launch_model():
     task.set_resources(sky.Resources(accelerators="H200-SXM:1"))
 
     # Generate cluster name
-    cluster_name = f"open-o3-sft"
+    cluster_name = f"open-o3-eval"
     # Add cluster prefix if defined in environment
     cluster_prefix = os.environ.get("CLUSTER_PREFIX")
     if cluster_prefix:

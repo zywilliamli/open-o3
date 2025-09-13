@@ -66,7 +66,7 @@ hotpot_qa = load_dataset("hotpotqa/hotpot_qa", "fullwiki").rename_column("questi
 ms_marco = load_dataset("microsoft/ms_marco", 'v2.1')
 
 sft_sample_dataset = concatenate_datasets([
-    # Dataset.from_list(browse_comp['train'][:500]).add_column("source", ["browse_comp"] * 500),
+    Dataset.from_list(browse_comp['train'][:500]).add_column("source", ["browse_comp"] * 500),
     Dataset.from_list(simple_qa['train'][:500]).add_column("source", ["simple_qa"] * 500),
     hotpot_qa['train'].select(range(500)).add_column("source", ["hotpot_qa"] * 500),
     ms_marco['train'].select(range(500)).add_column("source", ["ms_marco"] * 500)])

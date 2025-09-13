@@ -127,15 +127,36 @@ trainer_stats = trainer.train()
 model.save_pretrained("model")
 tokenizer.save_pretrained("model")
 
-repo_id = "twelvehertz/qwen2_5_14b_instruct_search_agent_sft_2"  # pick your name
-private = True
+try:
+    import os
+    import subprocess
 
-create_repo(repo_id, token=os.environ["HF_TOKEN"], private=private, exist_ok=True)
+    aws_cmd = "/usr/local/bin/aws"
+
+    print("Starting S3 upload...")
+    result = subprocess.run([
+        aws_cmd, "s3", "sync",
+        "./model",
+        f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft",
+        "--storage-class", "STANDARD_IA"
+    ], capture_output=True, text=True, timeout=600)
+
+    if result.returncode == 0:
+        print("✅ S3 upload completed successfully!")
+    else:
+        print(f"❌ S3 upload failed: {result.stderr}")
+        raise Exception(f"S3 sync failed: {result.stderr}")
+except Exception as e:
+    print(f"S3 upload failed with exception: {e}")
+
+repo_id = "twelvehertz/open-o3-sft"
+
+create_repo(repo_id, token=os.environ["HF_TOKEN"], private=False, exist_ok=True)
 
 upload_folder(
     folder_path="model",
     repo_id=repo_id,
     token=os.environ["HF_TOKEN"],
-    commit_message="Upload LoRA adapter and tokenizer",
+    commit_message="qwen 2.5 14b instruct lora module for web search",
 )
 print(f"Pushed to https://huggingface.co/{repo_id}")

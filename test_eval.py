@@ -1,4 +1,10 @@
 import argparse
+import os
+
+# Set environment variables before importing any torch-related modules
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False,max_split_size_mb:128"
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+os.environ["PY_SSIZE_T_CLEAN"] = "1"
 
 from eval.browsecomp_eval import BrowseCompEval
 from eval.hf_search_agent_sampler import HFSearchAgentSampler
@@ -15,9 +21,9 @@ def run_eval(args):
     grader = OChatCompletionSampler(model=args.grader_model)
 
     if args.eval_set == "browsecomp":
-        harness = BrowseCompEval(grader_model=grader, num_examples=args.num_samples)
+        harness = BrowseCompEval(grader_model=grader, num_examples=int(args.num_samples))
     elif args.eval_set == "simpleqa":
-        harness = SimpleQAEval(grader_model=grader, num_examples=args.num_samples)
+        harness = SimpleQAEval(grader_model=grader, num_examples=int(args.num_samples))
     else:
         raise ValueError(f"Invalid eval set name, currently only supporting {SUPPORTED_EVAL_SETS}")
 
