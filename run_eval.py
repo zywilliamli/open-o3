@@ -39,8 +39,7 @@ def launch_model():
         export CUDA_LAUNCH_BLOCKING=1
         
         uv add 'openpipe-art[backend]'
-        uv run python test_eval.py --sampler=hf --num-samples=50 --use-trained-peft
-
+        uv run python test_eval.py --sampler=hf --num-samples=100 --eval-set=simpleqa --use-trained-peft
     """)
 
     # Create a SkyPilot Task

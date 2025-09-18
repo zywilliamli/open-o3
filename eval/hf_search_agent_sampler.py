@@ -33,7 +33,7 @@ class HFSearchAgentSampler(SamplerBase):
                 result = subprocess.run([
                     aws_cmd, "s3", "sync",
                     art_path,
-                    f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft",
+                    f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft-3",
                     "--storage-class", "STANDARD_IA"
                 ], capture_output=True, text=True, timeout=600)
 

@@ -71,7 +71,7 @@ sft_sample_dataset = concatenate_datasets([
     hotpot_qa['train'].select(range(500)).add_column("source", ["hotpot_qa"] * 500),
     ms_marco['train'].select(range(500)).add_column("source", ["ms_marco"] * 500)])
 
-sft_sample_dataset = sft_sample_dataset.shuffle(RANDOM_SEED).select(range(2000))
+sft_sample_dataset = sft_sample_dataset.shuffle(RANDOM_SEED)#.select(range(2000))
 
 
 async def rollout(user_input):

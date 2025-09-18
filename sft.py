@@ -1,7 +1,7 @@
 from unsloth import FastLanguageModel
-from unsloth_zoo.dataset_utils import train_on_responses_only
 from huggingface_hub import create_repo, upload_folder
 import os
+import torch
 
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="unsloth/Qwen2.5-14B-Instruct",
@@ -51,7 +51,7 @@ def clean_messages(messages):
 
 
 all_conversations = []
-with open("training-trajectories.jsonl", "r") as f:
+with open("training-trajectories-new.jsonl", "r") as f:
     for line in f:
         all_conversations.append(json.loads(line))
 
@@ -74,12 +74,11 @@ split_dataset = full_dataset.train_test_split(test_size=0.05, seed=42)
 train_dataset = split_dataset["train"]
 val_dataset = split_dataset["test"]
 
-print(dataset_list[0])
+print(train_dataset[0])
 from trl import SFTTrainer, SFTConfig
-from transformers import DataCollatorForSeq2Seq
 
 # Keep most recent context if truncation happens
-tokenizer.truncation_side = "left"
+tokenizer.truncation_side = "right"
 tokenizer.padding_side = "right"
 
 MAX_LEN = 16384
@@ -90,37 +89,91 @@ trainer = SFTTrainer(
     train_dataset=train_dataset,
     eval_dataset=val_dataset,
     args=SFTConfig(
+        group_by_length=True,
         dataset_text_field="text",
         max_seq_length=MAX_LEN,
         packing=False,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=16,
-        warmup_steps=50,
-        num_train_epochs=5,  # start lower; extend if stable
-        learning_rate=2e-5,  # safer with small eff batch
+        warmup_steps=10,
+        num_train_epochs=8,
+        learning_rate=5e-5,
         logging_steps=5,
-        eval_steps=50,
+        eval_steps=10,
         eval_strategy="steps",
-        save_strategy="epoch",
-        optim="adamw_8bit",
+        save_strategy="steps",
+        save_steps=10,
+        load_best_model_at_end=True,
+        optim="adamw_torch",
         weight_decay=0.01,
-        lr_scheduler_type="linear",
+        lr_scheduler_type="cosine",
         seed=3407,
         report_to="none",
         max_grad_norm=0.5,
-        warmup_ratio=0.03,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
+        save_total_limit=2,
+        dataset_num_proc=4,
+        dataloader_num_workers=2
     ),
 )
 
 QWEN_INSTRUCTION_PART = "<|im_start|>user\n"
 QWEN_RESPONSE_PART = "<|im_start|>assistant\n"
 
-trainer.data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
-trainer = train_on_responses_only(
-    trainer,
-    instruction_part=QWEN_INSTRUCTION_PART,
-    response_part=QWEN_RESPONSE_PART,
-)
+# Always include ALL assistant spans (including tool invocations)
+# in the supervised labels by widening the mask to every
+# <|im_start|>assistant ... <|im_end|> block.
+base_collator = trainer.data_collator
+
+# Literal token sequences for assistant header and end marker
+resp_tokens = tokenizer.encode(QWEN_RESPONSE_PART, add_special_tokens=False)
+end_tokens = tokenizer.encode("<|im_end|>", add_special_tokens=False)
+
+
+def _find_all(subseq, seq):
+    starts = []
+    n, m = len(seq), len(subseq)
+    if m == 0:
+        return starts
+    i = 0
+    while i <= n - m:
+        if seq[i:i + m] == subseq:
+            starts.append(i)
+            i += m
+        else:
+            i += 1
+    return starts
+
+
+class CollatorAllAssistant:
+    def __init__(self, base):
+        self.base = base
+
+    def __call__(self, features):
+        batch = self.base(features)
+        input_ids = batch["input_ids"]  # [B, T]
+        # Rebuild labels from scratch: only assistant spans supervised
+        for b in range(input_ids.size(0)):
+            ids_t = input_ids[b]
+            labs_t = torch.full_like(ids_t, -100)
+            ids = ids_t.tolist()
+            # Find every assistant block and label its content
+            starts = _find_all(resp_tokens, ids)
+            for s in starts:
+                tail = ids[s + len(resp_tokens):]
+                end_rel_starts = _find_all(end_tokens, tail)
+                if not end_rel_starts:
+                    continue
+                e = s + len(resp_tokens) + end_rel_starts[0]
+                start_idx = s + len(resp_tokens)
+                end_idx = e
+                labs_t[start_idx:end_idx] = ids_t[start_idx:end_idx]
+            batch["labels"][b] = labs_t
+        return batch
+
+
+trainer.data_collator = CollatorAllAssistant(base_collator)
 
 trainer_stats = trainer.train()
 
@@ -137,7 +190,7 @@ try:
     result = subprocess.run([
         aws_cmd, "s3", "sync",
         "./model",
-        f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft",
+        f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft-3",
         "--storage-class", "STANDARD_IA"
     ], capture_output=True, text=True, timeout=600)
 
@@ -149,7 +202,7 @@ try:
 except Exception as e:
     print(f"S3 upload failed with exception: {e}")
 
-repo_id = "twelvehertz/open-o3-sft"
+repo_id = "twelvehertz/open-o3-sft-3"
 
 create_repo(repo_id, token=os.environ["HF_TOKEN"], private=False, exist_ok=True)
 
