@@ -4,7 +4,6 @@ from enum import Enum
 from typing import Annotated
 
 from typing_extensions import TypedDict
-from datetime import datetime
 
 import dotenv
 
@@ -42,7 +41,13 @@ def exa_web_search(query: str) -> str:
 @tool
 def tavily_web_search(query: str) -> str:
     """search the web using Tavily Search"""
-    return TavilySearch(max_results=5).invoke({"query": query})
+    res = TavilySearch(max_results=5).invoke({"query": query})
+    clean_res = ''
+    for result in res['results']:
+        clean_res += f"url: {result['url']}\n"
+        clean_res += f"title: {result['title']}\n"
+        clean_res += f"content: {result['content']}\n\n"
+    return clean_res
 
 
 class SearchProvider(Enum):

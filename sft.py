@@ -33,6 +33,17 @@ model = FastLanguageModel.get_peft_model(
     loftq_config=None,  # And LoftQ
 )
 
+SPECIALS = ["</tool_response>", "<tool_response>"]
+to_add = [t for t in SPECIALS if t not in tokenizer.get_vocab()]
+if to_add:
+    print(to_add)
+    tokenizer.add_special_tokens({"additional_special_tokens": to_add})
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model.resize_token_embeddings(len(tokenizer))
+
+print([t for t in SPECIALS if t not in tokenizer.get_vocab()])
+
 import json
 from datasets import Dataset as HFDataset
 import copy
@@ -51,7 +62,7 @@ def clean_messages(messages):
 
 
 all_conversations = []
-with open("training-trajectories-new.jsonl", "r") as f:
+with open("training-trajectories-cleaned.jsonl", "r") as f:
     for line in f:
         all_conversations.append(json.loads(line))
 
@@ -70,12 +81,13 @@ for conversation in all_conversations:
     )
 
 full_dataset = HFDataset.from_dict({"text": dataset_list})
-split_dataset = full_dataset.train_test_split(test_size=0.05, seed=42)
+split_dataset = full_dataset.train_test_split(test_size=0.1, seed=42)
 train_dataset = split_dataset["train"]
 val_dataset = split_dataset["test"]
 
 print(train_dataset[0])
 from trl import SFTTrainer, SFTConfig
+from transformers import DataCollatorForSeq2Seq
 
 # Keep most recent context if truncation happens
 tokenizer.truncation_side = "right"
@@ -112,68 +124,28 @@ trainer = SFTTrainer(
         max_grad_norm=0.5,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        save_total_limit=2,
+        save_total_limit=10,
         dataset_num_proc=4,
         dataloader_num_workers=2
     ),
 )
 
+from unsloth_zoo.dataset_utils import train_on_responses_only
+
 QWEN_INSTRUCTION_PART = "<|im_start|>user\n"
 QWEN_RESPONSE_PART = "<|im_start|>assistant\n"
+trainer.data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
+trainer = train_on_responses_only(
+    trainer,
+    instruction_part=QWEN_INSTRUCTION_PART,
+    response_part=QWEN_RESPONSE_PART,
+)
 
-# Always include ALL assistant spans (including tool invocations)
-# in the supervised labels by widening the mask to every
-# <|im_start|>assistant ... <|im_end|> block.
-base_collator = trainer.data_collator
-
-# Literal token sequences for assistant header and end marker
-resp_tokens = tokenizer.encode(QWEN_RESPONSE_PART, add_special_tokens=False)
-end_tokens = tokenizer.encode("<|im_end|>", add_special_tokens=False)
-
-
-def _find_all(subseq, seq):
-    starts = []
-    n, m = len(seq), len(subseq)
-    if m == 0:
-        return starts
-    i = 0
-    while i <= n - m:
-        if seq[i:i + m] == subseq:
-            starts.append(i)
-            i += m
-        else:
-            i += 1
-    return starts
-
-
-class CollatorAllAssistant:
-    def __init__(self, base):
-        self.base = base
-
-    def __call__(self, features):
-        batch = self.base(features)
-        input_ids = batch["input_ids"]  # [B, T]
-        # Rebuild labels from scratch: only assistant spans supervised
-        for b in range(input_ids.size(0)):
-            ids_t = input_ids[b]
-            labs_t = torch.full_like(ids_t, -100)
-            ids = ids_t.tolist()
-            # Find every assistant block and label its content
-            starts = _find_all(resp_tokens, ids)
-            for s in starts:
-                tail = ids[s + len(resp_tokens):]
-                end_rel_starts = _find_all(end_tokens, tail)
-                if not end_rel_starts:
-                    continue
-                e = s + len(resp_tokens) + end_rel_starts[0]
-                start_idx = s + len(resp_tokens)
-                end_idx = e
-                labs_t[start_idx:end_idx] = ids_t[start_idx:end_idx]
-            batch["labels"][b] = labs_t
-        return batch
-
-
-trainer.data_collator = CollatorAllAssistant(base_collator)
+ids = trainer.train_dataset[0]["input_ids"]
+labels = trainer.train_dataset[0]["labels"]
+space = tokenizer("*", add_special_tokens=False).input_ids[0]
+unmasked_sample = tokenizer.decode([space if l == -100 else t for t, l in zip(ids, labels)])
+print(unmasked_sample)
 
 trainer_stats = trainer.train()
 
@@ -190,7 +162,7 @@ try:
     result = subprocess.run([
         aws_cmd, "s3", "sync",
         "./model",
-        f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft-3",
+        f"s3://{os.environ.get('BACKUP_BUCKET')}/models/open-o3-sft-4",
         "--storage-class", "STANDARD_IA"
     ], capture_output=True, text=True, timeout=600)
 
@@ -202,7 +174,7 @@ try:
 except Exception as e:
     print(f"S3 upload failed with exception: {e}")
 
-repo_id = "twelvehertz/open-o3-sft-3"
+repo_id = "twelvehertz/open-o3-sft-4"
 
 create_repo(repo_id, token=os.environ["HF_TOKEN"], private=False, exist_ok=True)
 
