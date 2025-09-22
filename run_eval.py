@@ -39,7 +39,7 @@ def launch_model():
         export CUDA_LAUNCH_BLOCKING=1
         
         uv add 'openpipe-art[backend]'
-        uv run python test_eval.py --sampler=hf --num-samples=100 --eval-set=simpleqa --use-trained-peft
+        uv run python test_eval.py --sampler=hf --num-samples=10 --eval-set=simpleqa --hf-model-id=twelvehertz/open-o3-sft-borked
     """)
 
     # Create a SkyPilot Task
@@ -50,7 +50,7 @@ def launch_model():
         workdir=".",  # Sync the project directory
         envs=dict(dotenv_values()),  # type: ignore
     )
-    task.set_resources(sky.Resources(accelerators="H200-SXM:1"))
+    task.set_resources(sky.Resources(accelerators="H100-SXM:1"))
 
     # Generate cluster name
     cluster_name = f"open-o3-eval"

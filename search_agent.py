@@ -22,7 +22,7 @@ from art.langgraph import init_chat_model as train_model
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 
-SYSTEM_PROMPT = f"""You are an AI assistant, your task is to answer the user's query.
+SYSTEM_PROMPT = """"You are an AI assistant, your task is to answer the user's query.
 You have access to a web search tool to help you gather information when needed. """
 
 

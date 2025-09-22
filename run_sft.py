@@ -25,7 +25,7 @@ def launch_model():
 
     run_script = textwrap.dedent(f"""
         uv add unsloth
-        uv run python sft.py
+        DEBUG=1 ADD_SPECIAL_TOKENS=1 uv run python sft.py
     """)
 
     # Create a SkyPilot Task
