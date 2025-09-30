@@ -6,7 +6,6 @@ import os
 
 load_dotenv()
 
-
 def launch_model():
     setup_script = textwrap.dedent(
         """
@@ -34,21 +33,21 @@ def launch_model():
         export CUDA_LAUNCH_BLOCKING=1
         
         uv add 'openpipe-art[backend]'
-        uv run python eval.py --sampler=hf --num-samples=100 --eval-set=simpleqa --hf-model-id=twelvehertz/open-o3-sft-13-merged-full
+        uv run python train.py
     """)
 
     # Create a SkyPilot Task
     task = sky.Task(
-        name=f"open-o3-eval",
+        name=f"open-o3-rl",
         setup=setup_script,
         run=run_script,
         workdir=".",  # Sync the project directory
         envs=dict(dotenv_values()),  # type: ignore
     )
-    task.set_resources(sky.Resources(accelerators="H100-SXM:1"))
+    task.set_resources(sky.Resources(accelerators="H200-SXM:1"))
 
     # Generate cluster name
-    cluster_name = f"open-o3-eval"
+    cluster_name = f"open-o3-rl"
     # Add cluster prefix if defined in environment
     cluster_prefix = os.environ.get("CLUSTER_PREFIX")
     if cluster_prefix:
