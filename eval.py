@@ -30,7 +30,7 @@ def run_eval(args):
     if args.sampler == "oai":
         sampler = OAISearchAgentSampler("o4-mini")
     elif args.sampler == "hf":
-        sampler = HFSearchAgentSampler(args.hf_model_id)
+        sampler = HFSearchAgentSampler(args.hf_model_id, args.hf_model_is_peft)
     else:
         raise ValueError("Invalid sampler, must be 'oai' or 'hf'")
 
@@ -44,6 +44,8 @@ def main():
                         help="'oai' for OpenAI models via API or 'hf' for HuggingFace models run locally")
     parser.add_argument("--hf-model-id", default="unsloth/Qwen2.5-14B-Instruct",
                         help="configures which model to pull from huggingface hub when sampler is hf")
+    parser.add_argument("--hf-model-is-peft", action="store_true",
+                        help="is hf-model-id a peft model/lora module")
     parser.add_argument("--oai-model", default="o4-mini",
                         help="configures which model to use when sampler is oai")
     parser.add_argument("--num-samples", default=1, help="number of samples to run")

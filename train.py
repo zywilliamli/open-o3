@@ -41,6 +41,9 @@ from search_agent import SearchAgent
 from art import Trajectory
 from huggingface_hub import create_repo, upload_folder, snapshot_download
 
+RANDOM_SEED = 0
+random.seed(RANDOM_SEED)
+
 
 def load_simple_qa(train_test_split: float = 0.8):
     df = pd.read_csv(
@@ -58,8 +61,10 @@ def load_simple_qa(train_test_split: float = 0.8):
 async def train():
     HF_MODEL_ID = "twelvehertz/open-o3-sft-13-merged-full"
 
-    train_set = load_simple_qa(0.8)['train'][500:700]
-    val_set = load_simple_qa(0.8)['train'][700:720]
+    train_set = load_simple_qa(0.8)['train'][:1000]
+    random.shuffle(train_set)
+
+    val_set = load_simple_qa(0.8)['test'][:100]
 
     model = art.TrainableModel(
         name="rl-open-o3",
@@ -85,9 +90,16 @@ async def train():
             result = await graph.ainvoke({"messages": [{"role": "user", "content": row['query']}]}, agent.config)
             response = result["messages"][-1].content
             grade_result = harness.grade_sample(row['query'], row['answer'], response)
-            return Trajectory(messages_and_choices=[], reward=1 if grade_result == "A" else 0)
+            print(f"grade: {grade_result}, {row['query']}, {response[:1000]}, {row['answer'][:1000]}")
+            if grade_result == 'A':
+                reward = 1
+            elif grade_result == 'B':
+                reward = 0.1
+            else:
+                reward = 0
+            return Trajectory(messages_and_choices=[], reward=reward)
         except Exception as e:
-            print(e)
+            print(f"Rollout failed with error: {e}")
             return Trajectory(messages_and_choices=[], reward=0)
 
     async def benchmark_model(model, data):
@@ -118,11 +130,11 @@ async def train():
         return avg_metrics
 
     for batch in train_iterator:
-        if (batch.step) % 20 == 0:
+        if (batch.step) % 50 == 0:
             print(f"\n--- Evaluating at Iteration {batch.step} ---")
             await benchmark_model(model, val_set)
 
-            repo_id = "twelvehertz/open-o3-simpleqa-rl"
+            repo_id = "twelvehertz/open-o3-simpleqa-rl-4"
 
             art_path = get_output_dir_from_model_properties(name="rl-open-o3", project="open-o3")
             ckpt_root = os.path.join(art_path, "checkpoints")
@@ -162,8 +174,30 @@ async def train():
         await model.train(
             groups,
             _config=art.dev.TrainConfig(
-                precalculate_logprobs=False
-            ),
+                # # --- stability
+                # beta=0.02,  # KL penalty
+                # loss_type="dapo",  # length-robust loss
+                # importance_sampling_level="sequence",  # GSPO-style sequence IS
+                # max_grad_norm=0.2,  # clip spikes
+                #
+                # # --- reward scaling (pick one of these)
+                # scale_rewards="batch",  # or: False  (see notes above)
+                #
+                # # --- vLLM off-policy correction (safe to set explicitly)
+                # vllm_importance_sampling_correction=True,
+                # vllm_importance_sampling_cap=2.0,
+                #
+                # # --- mild replay / clipping
+                # num_iterations=1,  # small values tend to be stabler
+                # epsilon=0.2,  # ratio clipping
+                #
+                # # --- generation for RL sampling (controls during gather)
+                # temperature=1.0,
+                # top_p=1.0,
+
+                # leave your existing flag
+                precalculate_logprobs=False,
+            )
         )
     print("Training finished.")
 

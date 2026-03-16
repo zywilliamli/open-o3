@@ -35,7 +35,12 @@ def google_web_search(query: str) -> list:
 @tool
 def exa_web_search(query: str) -> str:
     """search the web using Exa Search"""
-    return ExaSearchResults()._run(query=query, num_results=5, highlights=True)
+    res = ExaSearchResults()._run(query=query, num_results=5, summary=True)
+    clean_res = ''
+    for result in res.results:
+        clean_res += f"TITLE: {result.title}\n"
+        clean_res += f"CONTENT: {result.summary}\n\n"
+    return clean_res
 
 
 @tool
@@ -61,7 +66,7 @@ class State(TypedDict):
 
 
 class SearchAgent:
-    def __init__(self, search_limit: int = 5, search_provider: SearchProvider = SearchProvider.TAVILY) -> None:
+    def __init__(self, search_limit: int = 5, search_provider: SearchProvider = SearchProvider.EXA) -> None:
         self.config = {"configurable": {"thread_id": "1"}, "recursion_limit": 50}
         self.search_limit = search_limit
         self.search_provider = search_provider

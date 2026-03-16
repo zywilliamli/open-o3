@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from typing import Any
 
 from eval.interfaces import MessageList, SamplerBase, SamplerResponse
@@ -9,10 +10,31 @@ from art import Trajectory
 from art.langgraph import wrap_rollout
 from art.trajectories import get_messages
 from art.local import LocalBackend
+from unsloth import FastLanguageModel
+from peft import PeftModel
+from huggingface_hub import create_repo
 
 
 class HFSearchAgentSampler(SamplerBase):
-    def __init__(self, hf_model_id: str):
+    def __init__(self, hf_model_id: str, is_peft: bool = False, base_model_id: str = "twelvehertz/open-o3-sft-13-merged-full"):
+        if is_peft:
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=base_model_id,
+                load_in_4bit=False,
+                load_in_8bit=True,
+                full_finetuning=False,
+            )
+            model_with_adapter = PeftModel.from_pretrained(model, hf_model_id)
+            merged_model = model_with_adapter.merge_and_unload()
+
+            repo_id = f"{hf_model_id}-merged-full"
+
+            create_repo(repo_id, token=os.environ["HF_TOKEN"], private=False, exist_ok=True)
+            merged_model.push_to_hub(repo_id, safe_serialization=True)
+            tokenizer.push_to_hub(repo_id)
+
+            hf_model_id = repo_id
+
         self.model = art.TrainableModel(
             name="sft-open-o3",
             project="open-o3",

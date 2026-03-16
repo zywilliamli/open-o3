@@ -38,7 +38,7 @@ def launch_model():
 
     # Create a SkyPilot Task
     task = sky.Task(
-        name=f"open-o3-rl",
+        name=f"open-o3-rl-3",
         setup=setup_script,
         run=run_script,
         workdir=".",  # Sync the project directory
@@ -47,7 +47,7 @@ def launch_model():
     task.set_resources(sky.Resources(accelerators="H200-SXM:1"))
 
     # Generate cluster name
-    cluster_name = f"open-o3-rl"
+    cluster_name = f"open-o3-rl-3"
     # Add cluster prefix if defined in environment
     cluster_prefix = os.environ.get("CLUSTER_PREFIX")
     if cluster_prefix:
